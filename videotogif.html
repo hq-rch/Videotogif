@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Omni Meme Generator | badag007</title>
+    <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #111; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; min-height: 100vh; justify-content: center; margin: 0; }
+        .container { background: #222; padding: 30px; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.7); width: 100%; max-width: 450px; text-align: center; border: 2px solid #333; }
+        h2 { color: #facc15; margin-top: 0; margin-bottom: 5px; font-size: 26px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+        .subtitle { font-size: 13px; color: #aaa; margin-bottom: 25px; }
+        
+        .upload-area { border: 2px dashed #444; padding: 25px 15px; border-radius: 12px; margin-bottom: 20px; cursor: pointer; background: #1a1a1a; transition: 0.3s; }
+        .upload-area:hover { border-color: #facc15; background: #2a2a2a; }
+        input[type="file"] { display: none; }
+        #info-upload { margin: 0; font-size: 15px; font-weight: 500; color: #ccc; }
+        
+        /* Input Teks Meme */
+        .meme-inputs { display: none; flex-direction: column; gap: 10px; margin-bottom: 20px; text-align: left; }
+        input[type="text"] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #111; color: white; font-size: 14px; box-sizing: border-box; outline: none; text-transform: uppercase; font-family: 'Impact', sans-serif; }
+        input[type="text"]:focus { border-color: #facc15; }
+
+        button { padding: 14px; border: none; border-radius: 8px; background: #facc15; color: #111; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; transition: 0.2s; text-transform: uppercase; letter-spacing: 1px; }
+        button:disabled { background: #444; color: #888; cursor: not-allowed; }
+        button:not(:disabled):hover { background: #ffe045; transform: translateY(-1px); }
+        
+        #loading { display: none; margin: 20px 0; color: #38bdf8; font-size: 14px; font-weight: bold; animation: pulse 1s infinite alternate; }
+        @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
+
+        #result-area { display: none; margin-top: 25px; border-top: 1px solid #333; padding-top: 20px; }
+        #gif-preview { max-width: 100%; height: auto; border-radius: 8px; border: 2px solid #444; background: #000; margin-bottom: 15px; }
+
+        .dl-btn { background: #10b981; text-decoration: none; display: block; padding: 14px; border-radius: 8px; color: white; font-weight: bold; font-size: 15px; width: 100%; box-sizing: border-box; transition: 0.2s; text-align: center; }
+        .dl-btn:hover { background: #059669; }
+
+        .saweria-btn { background: #faae2b; text-decoration: none; display: block; padding: 12px; border-radius: 8px; color: #111; margin-top: 30px; font-weight: 900; font-size: 14px; width: 100%; box-sizing: border-box; transition: 0.2s; border: 2px solid #e09922; text-align: center; }
+        .saweria-btn:hover { background: #ffbd4a; transform: translateY(-2px); box-shadow: 0 4px 15px rgba(250, 174, 43, 0.3); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Meme Generator</h2>
+    <div class="subtitle">Ubah Video jadi GIF Meme (Max 5 Detik)</div>
+
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <p id="info-upload">🎬 Pilih Video Pendek (MP4/WebM)</p>
+        <input type="file" id="fileInput" accept="video/mp4,video/webm" onchange="fileSelected(this)">
+    </div>
+
+    <div class="meme-inputs" id="meme-inputs">
+        <input type="text" id="text-top" placeholder="Teks Atas..." maxlength="40">
+        <input type="text" id="text-bottom" placeholder="Teks Bawah..." maxlength="40">
+    </div>
+
+    <button onclick="processGif()" id="btn-process" disabled>Bikin GIF Meme</button>
+    
+    <div id="loading">⏳ Sedang memproses frame... 0%</div>
+
+    <div id="result-area">
+        <p style="font-size: 12px; color: #aaa; margin-bottom: 10px;">Hasil GIF (Klik kanan > Save di HP):</p>
+        <img id="gif-preview" alt="Meme Preview">
+        <a id="download-link" class="dl-btn" href="#" download="meme-badag007.gif">⬇️ Download File .GIF</a>
+    </div>
+
+    <a href="https://saweria.co/badag007" target="_blank" class="saweria-btn">☕ Traktir Kopi via Saweria</a>
+</div>
+
+<script>
+    let video = document.createElement('video');
+    let canvas = document.createElement('canvas');
+    let ctx = canvas.getContext('2d');
+    let gifBlob = null;
+
+    function fileSelected(input) {
+        if (input.files && input.files[0]) {
+            let fileName = input.files[0].name;
+            if(fileName.length > 25) fileName = fileName.substring(0, 22) + '...';
+            document.getElementById('info-upload').innerText = '📁 ' + fileName;
+            document.getElementById('btn-process').disabled = false;
+            document.getElementById('meme-inputs').style.display = 'flex';
+            document.getElementById('result-area').style.display = 'none';
+        }
+    }
+
+    async function processGif() {
+        const fileInput = document.getElementById('fileInput');
+        const btnProcess = document.getElementById('btn-process');
+        const loadingDiv = document.getElementById('loading');
+        const textTop = document.getElementById('text-top').value.toUpperCase();
+        const textBottom = document.getElementById('text-bottom').value.toUpperCase();
+        
+        if (!fileInput.files[0]) return;
+
+        btnProcess.disabled = true;
+        loadingDiv.style.display = "block";
+        document.getElementById('result-area').style.display = 'none';
+
+        // Load video ke elemen memori
+        const fileURL = URL.createObjectURL(fileInput.files[0]);
+        video.src = fileURL;
+        video.muted = true;
+
+        video.onloadeddata = async () => {
+            // Batasi durasi max 5 detik biar render ga jebol
+            const duration = Math.min(video.duration, 5); 
+            
+            // Optimasi resolusi GIF biar enteng dikirim (Maks lebar 500px)
+            let width = video.videoWidth;
+            let height = video.videoHeight;
+            const maxW = 500;
+            if (width > maxW) {
+                height = height * (maxW / width);
+                width = maxW;
+            }
+            canvas.width = width;
+            canvas.height = height;
+
+            // Setup GIF.js instance
+            // Kita pake worker biar ga nge-hang browser tab
+            const gif = new GIF({
+                workers: 2,
+                quality: 10, // Kualitas 1-20 (makin kecil makin bagus tapi lama)
+                width: width,
+                height: height,
+                workerScript: 'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js' // Wajib point ke worker CDN
+            });
+
+            const fps = 10; // FPS GIF standar biar hemat space
+            const interval = 1 / fps;
+            let currentTime = 0;
+            let framesProcessed = 0;
+            const totalFrames = Math.floor(duration * fps);
+
+            loadingDiv.innerText = `⏳ Menyiapkan frame AI... 0%`;
+
+            // Loop buat nangkep frame per frame
+            while (currentTime < duration) {
+                // Seek video ke waktu spesifik
+                video.currentTime = currentTime;
+                
+                // Nunggu browser selesai ngerender frame itu
+                await new Promise(r => video.onseeked = r);
+
+                // 1. Gambar Video Asli ke Canvas
+                ctx.drawImage(video, 0, 0, width, height);
+
+                // 2. Setting Gaya Teks Meme (Impact style)
+                const fontSize = Math.floor(width / 12); // Font size dinamis sesuai lebar video
+                ctx.font = `900 ${fontSize}px Impact, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.fillStyle = 'white';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = Math.floor(fontSize / 8); // Outline tebel hitam
+                ctx.textBaseline = 'top';
+
+                // 3. Gambar Teks Atas (kalau ada)
+                if (textTop) {
+                    ctx.strokeText(textTop, width / 2, 10);
+                    ctx.fillText(textTop, width / 2, 10);
+                }
+
+                // 4. Gambar Teks Bawah (kalau ada)
+                if (textBottom) {
+                    ctx.textBaseline = 'bottom';
+                    ctx.strokeText(textBottom, width / 2, height - 10);
+                    ctx.fillText(textBottom, width / 2, height - 10);
+                }
+
+                // 5. Tambah frame ke GIF builder
+                gif.addFrame(ctx, { copy: true, delay: interval * 1000 });
+
+                framesProcessed++;
+                loadingDiv.innerText = `⏳ Memproses frame... ${Math.round((framesProcessed / totalFrames) * 100)}%`;
+                
+                currentTime += interval;
+            }
+
+            loadingDiv.innerText = "🧠 Merakit file GIF aesthetic... (Tunggu bentar)";
+
+            // Mulai render GIF (asinkron lewat worker)
+            gif.on('finished', function(blob) {
+                gifBlob = blob;
+                const gifURL = URL.createObjectURL(blob);
+                
+                document.getElementById('gif-preview').src = gifURL;
+                document.getElementById('download-link').href = gifURL;
+                
+                loadingDiv.style.display = "none";
+                document.getElementById('result-area').style.display = "block";
+                btnProcess.disabled = false;
+            });
+
+            gif.render();
+        };
+    }
+</script>
+
+</body>
+</html>
